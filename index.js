@@ -2,7 +2,10 @@ const express = require('express')
 const app = express()
 const AWS = require("aws-sdk");
 const s3 = new AWS.S3()
+const multer = require('multer');
 const bodyParser = require('body-parser');
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(bodyParser.json())
 
@@ -33,6 +36,8 @@ app.get('*', async (req,res) => {
 // curl -i -XPUT --data '{"k1":"value 1", "k2": "value 2"}' -H 'Content-type: application/json' https://some-app.cyclic.app/myFile.txt
 app.put('*', async (req,res) => {
   let filename = req.path.slice(1)
+  
+  console.log(key)
 
   console.log(typeof req.body)
 
@@ -58,6 +63,36 @@ app.delete('*', async (req,res) => {
   res.set('Content-type', 'text/plain')
   res.send('ok').end()
 })
+
+app.post('*', upload.single('file'), (req, res) => {
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).send('No file uploaded.');
+  }
+
+  const key = `${file.originalname}`;
+
+  console.log(key)
+  
+  const params = {
+    Bucket: process.env.BUCKET,
+    Key: key,
+    Body: file.buffer,
+    ContentType: file.mimetype,
+  };
+
+  // Upload the file to S3
+  s3.upload(params, (err, data) => {
+    if (err) {
+      console.error('Error uploading file to S3:', err);
+      return res.status(500).send('Error uploading file to S3.');
+    }
+
+    console.log('File uploaded successfully. S3 URL:', data.Location);
+    res.status(200).send('File uploaded successfully.');
+  });
+});
 
 // /////////////////////////////////////////////////////////////////////////////
 // Catch all handler for all other request.
